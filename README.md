@@ -1,182 +1,426 @@
-# Cursor AI IDE Installer for Linux
+# Cursor AI IDE Installer for Linux - Enhanced Edition
 
-This project provides a fully rewritten, robust, and user-friendly installer script for installing, updating, and uninstalling the Cursor AI IDE on Linux systems. It enhances compatibility across major Linux distributions and offers an improved command-line interface (CLI) experience with dynamic feedback and versatile options.
+A comprehensive, robust, and user-friendly installer script for installing, updating, and managing the Cursor AI IDE on Linux systems. This enhanced version provides improved compatibility across major Linux distributions, fixes sudo authentication issues, and offers a professional command-line interface with dynamic feedback and versatile installation options.
+
+---
+
+## Introduction
+
+**Cursor AI IDE** is an advanced AI-powered code editor that combines the familiar interface of VS Code with cutting-edge AI capabilities. This installer script provides a seamless way to install, update, and manage Cursor IDE on Linux systems, while also serving as a general-purpose AppImage integration tool.
+
+### What's New in This Version
+
+- **Fixed sudo authentication issues** - Resolves hanging password prompts and timeout problems
+- **Enhanced error handling** - Better command execution tracking and failure recovery
+- **Improved cross-distribution support** - Tested on Ubuntu, Fedora, Arch, and openSUSE
+- **Professional CLI interface** - Clean, color-coded output without emojis
+- **Robust AppImage integration** - Universal AppImage desktop integration system
+- **Advanced dependency management** - Automatic detection and installation of required packages
 
 ---
 
 ## Features
 
 ### User Interface Improvements
-- ANSI color-formatted ASCII art logo for a visually appealing CLI experience  
-- Dynamic progress bars and spinners to provide real-time installation feedback  
-- Clean, straightforward CLI messages without emojis for professional output  
+- **ANSI Color-Formatted Output**: Professional color-coded messages and progress indicators
+- **Dynamic Progress Bars**: Real-time feedback during downloads and installations
+- **Interactive Menu System**: Beginner-friendly guided installation process
+- **ASCII Art Logo**: Visually appealing Cursor IDE branding
 
-### Enhanced Dependency Management
-- Automatic detection of required dependencies  
-- Smart package manager support across popular distros including APT, DNF, YUM, Pacman, and Zypper  
-- Visualized installation progress per package for clarity  
+### Enhanced Installation Methods
+- **Native Package Installation**: Attempts system-native packages (`.deb`, `.rpm`, AUR) when available
+- **AppImage Installation**: Downloads and installs the latest Cursor AppImage automatically
+- **Local AppImage Support**: Install from pre-downloaded AppImage files
+- **User-Space Integration**: Install without system privileges in `~/.local/`
 
-### AppImage and Native Installer Support
-- Attempts native installation using system packages (`.deb`, `.rpm`, AUR) when available  
-- Automatic fallback to downloading and installing the AppImage version if native installation is not feasible  
-- Option to manually specify a local AppImage file path for offline or custom installations  
+### Cross-Distribution Support
+- **APT** (Ubuntu, Debian, Linux Mint, Elementary OS)
+- **DNF/YUM** (Fedora, CentOS, RHEL, Rocky Linux, AlmaLinux)
+- **Pacman** (Arch Linux, Manjaro, EndeavourOS)
+- **Zypper** (openSUSE, SLES)
 
 ### System Integration
-- Creates proper desktop entries (`.desktop` files) for seamless menu integration  
-- Installs application icons for easy identification  
-- Adds a command-line symlink (`cursor`) to `/usr/local/bin` for VSCode-like command line launching  
+- **Desktop Entry Creation**: Seamless integration with desktop environments
+- **Icon Installation**: Proper application icons in system icon themes
+- **Command-Line Access**: Creates `cursor` symlink for terminal usage
+- **MIME Type Association**: Associates common file types with Cursor IDE
 
-### Interactive and Flag-Based Operation Modes
-- Interactive menu-driven installer for ease of use, especially for beginners  
-- Support for direct flags (`--install`, `--update`, `--uninstall`, `--help`) enabling scripting and automation  
-
-### Update Process
-- Safe and reliable update mechanism with automatic backup of the previous installation  
-- Rollback support on update failure to prevent broken installs  
-
-### Uninstallation
-- Complete removal of installed files, desktop entries, icons, and command-line symlinks  
-- Clean system state restoration after uninstall  
+### Advanced Management Features
+- **Safe Update System**: Automatic backup and rollback on update failure
+- **Complete Uninstallation**: Clean removal of all files and configurations
+- **AppImage Management**: Universal AppImage integration for any application
+- **Dependency Verification**: Automatic checking and installation of required packages
 
 ---
 
 ## Prerequisites
 
-The installer requires these packages:
+The installer automatically detects and installs missing dependencies. Required packages include:
 
-- `curl`  
-- `wget`  
-- `jq`  
-- `figlet`  
-- `rsync`  
-
-The script detects and installs any missing dependencies on supported distributions automatically.
-
----
-
-## Supported Linux Distributions
-
-Tested and compatible with major Linux distributions using the following package managers:
-
-- `apt` (Ubuntu, Debian, Linux Mint)  
-- `dnf` (Fedora, CentOS 8+, RHEL 8+)  
-- `yum` (CentOS, RHEL 7 and older)  
-- `pacman` (Arch Linux, Manjaro)  
-- `zypper` (openSUSE, SLES)  
+- `curl` - For downloading files and API requests
+- `wget` - Alternative download method with progress bars
+- `jq` - JSON parsing for API responses
+- `figlet` - ASCII art generation (optional)
+- `rsync` - Efficient file synchronization
+- `bsdtar` - Archive extraction (AppImage integration)
+- `file` - File type detection
+- `xdg-utils` - Desktop integration utilities
+- `desktop-file-utils` - Desktop entry management
 
 ---
 
-## Quick Start
+## Installation
 
-Run the installer with root privileges:
+### Quick Install (Recommended)
 
 ```bash
-sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/khodealib/CursorInstaller/master/cursor-install.sh)"
+# Download and run the installer
+curl -fsSL https://raw.githubusercontent.com/your-repo/cursor-installer/main/cursor.sh | bash
+
+# Or download first, then run
+wget https://raw.githubusercontent.com/your-repo/cursor-installer/main/cursor.sh
+chmod +x cursor.sh
+./cursor.sh
 ```
 
-Follow the interactive menu or use command-line flags:
+### Manual Installation
 
-* `--install` : Install Cursor IDE
-* `--update` : Update existing installation
-* `--uninstall` : Remove Cursor IDE completely
-* `--help` : Display usage instructions
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/your-repo/cursor-installer.git
+   cd cursor-installer
+   ```
 
----
+2. **Make the script executable**:
+   ```bash
+   chmod +x cursor.sh
+   ```
 
-## Detailed Usage
-
-### Installation
-
-You can choose between:
-
-* **Automatic Native Installation**: Installs the native package if available for your distro.
-* **AppImage Installation**: Downloads and installs the latest Cursor AppImage or uses a manually specified AppImage file.
-
-### Updating
-
-The update process backs up your current installation before applying the new version. If the update fails, it restores the previous state automatically.
-
-### Uninstallation
-
-Removes all installed files including:
-
-* Application files in `/opt/Cursor/`
-* Desktop entries in `/usr/share/applications/cursor.desktop`
-* Application icon in `/usr/share/pixmaps/cursor.png`
-* Command-line symlink `/usr/local/bin/cursor`
+3. **Run the installer**:
+   ```bash
+   ./cursor.sh
+   ```
 
 ---
 
-## Manual Operation
+## Usage
 
-If preferred, you can manually perform the following steps:
+### Interactive Mode
 
-1. Download and extract the Cursor AppImage or native package
-2. Copy application files to `/opt/Cursor/`
-3. Create a desktop entry in `/usr/share/applications/`
-4. Install the icon in `/usr/share/pixmaps/`
-5. Create a symlink in `/usr/local/bin/` pointing to the executable
-6. Update the desktop database using `update-desktop-database`
+Run the script without arguments to enter the interactive menu:
+
+```bash
+./cursor.sh
+```
+
+The interactive menu provides:
+1. **Install Cursor IDE** - Choose from multiple installation methods
+2. **Update Cursor IDE** - Safely update existing installation
+3. **Uninstall Cursor IDE** - Completely remove Cursor IDE
+4. **Check Latest Version** - Query latest available versions
+5. **Integrate Custom AppImage** - Add any AppImage to desktop
+6. **List Integrated AppImages** - Show all integrated AppImages
+7. **Remove Integrated AppImage** - Remove specific AppImage integration
+8. **Help** - Display usage information
+
+### Command-Line Flags
+
+For automation and scripting:
+
+```bash
+# Install Cursor IDE
+./cursor.sh --install
+
+# Update existing installation
+./cursor.sh --update
+
+# Uninstall Cursor IDE
+./cursor.sh --uninstall
+
+# Check latest version
+./cursor.sh --check-version
+
+# Integrate a custom AppImage
+./cursor.sh --integrate-appimage /path/to/app.AppImage
+
+# Auto-download and integrate Cursor AppImage
+./cursor.sh --integrate-appimage --auto-download
+
+# List integrated AppImages
+./cursor.sh --list-appimages
+
+# Remove integrated AppImage
+./cursor.sh --remove-appimage
+
+# Display help
+./cursor.sh --help
+
+# Enable debug mode
+./cursor.sh --debug --install
+```
+
+---
+
+## Code Structure and Architecture
+
+### Core Components
+
+#### 1. Configuration and Variables
+```bash
+# Global installation paths
+CURSOR_EXTRACT_DIR="/opt/Cursor"
+ICON_PATH="/usr/share/pixmaps/cursor.png"
+DESKTOP_ENTRY_PATH="/usr/share/applications/cursor.desktop"
+SYMLINK_PATH="/usr/local/bin/cursor"
+
+# User-specific paths
+USER_LOCAL_BIN="$HOME/.local/bin"
+USER_DESKTOP_DIR="$HOME/.local/share/applications"
+USER_ICON_DIR="$HOME/.local/share/icons"
+```
+
+#### 2. Distribution Detection
+```bash
+detect_distro() {
+    # Detects Linux distribution from /etc/os-release
+    # Sets DISTRO_FAMILY for package manager selection
+    # Supports debian, rhel, arch, suse families
+}
+```
+
+#### 3. Fixed Sudo Authentication
+```bash
+safe_sudo() {
+    # Check if we can run sudo without password
+    if sudo -n true 2>/dev/null; then
+        print_info "Using cached sudo credentials"
+        sudo "$@"
+        return $?
+    fi
+    
+    # Prompt for password if needed
+    print_info "Administrator privileges required for: $*"
+    echo -e "${YELLOW}Please enter your password:${RESET}"
+    
+    # Execute sudo command directly without timeout wrapper
+    sudo "$@"
+    local exit_code=$?
+    
+    if [ $exit_code -ne 0 ]; then
+        print_error "Sudo command failed with exit code $exit_code"
+        return $exit_code
+    fi
+    
+    return 0
+}
+```
+
+#### 4. Installation Methods
+
+**Native Package Installation**:
+```bash
+try_debian_installation() {
+    # Downloads .deb package from official sources
+    # Installs using dpkg with dependency resolution
+}
+
+try_rhel_installation() {
+    # Downloads .rpm package
+    # Installs using dnf/yum with dependency resolution
+}
+
+try_arch_installation() {
+    # Uses AUR helpers (yay, paru) for installation
+    # Tries multiple AUR packages (cursor-appimage, cursor-ide)
+}
+```
+
+**AppImage Installation**:
+```bash
+install_appimage() {
+    # Extracts AppImage to /opt/Cursor
+    # Configures desktop integration
+    # Creates command-line symlink
+}
+```
+
+#### 5. AppImage Integration System
+```bash
+integrate_appimage() {
+    # Universal AppImage integration for any application
+    # Extracts metadata from embedded .desktop file
+    # Creates user-space desktop integration
+    # Handles icon extraction and installation
+}
+```
+
+#### 6. Update and Maintenance
+```bash
+update_cursor() {
+    # Creates backup of current installation
+    # Attempts native update first
+    # Falls back to AppImage update
+    # Restores backup on failure
+}
+```
+
+### Key Functions Overview
+
+| Function | Purpose | Implementation Details |
+|----------|---------|----------------------|
+| `main()` | Entry point and argument parsing | Handles command-line flags and interactive mode |
+| `detect_distro()` | Linux distribution detection | Uses `/etc/os-release` to determine package manager |
+| `safe_sudo()` | Fixed sudo authentication | Resolves hanging password prompts |
+| `install_cursor()` | Main installation orchestrator | Supports multiple installation methods |
+| `integrate_appimage()` | AppImage desktop integration | Universal AppImage integration system |
+| `update_cursor()` | Safe update mechanism | Backup and rollback support |
+| `check_appimage_dependencies()` | Dependency management | Automatic package installation |
+| `configure_desktop_integration()` | System integration | Desktop entries, icons, command-line access |
+
+---
+
+##  Technical Implementation
+
+### Architecture Detection
+```bash
+ARCH=$(uname -m)
+case $ARCH in
+    x86_64) CURSOR_ARCH="x64" ;;
+    aarch64|arm64) CURSOR_ARCH="arm64" ;;
+    *) CURSOR_ARCH="x64" ;;
+esac
+```
+
+### API Integration
+The installer uses multiple API endpoints for resilience:
+- `https://www.cursor.com/api/download` - Official API
+- `https://downloads.cursor.com/production/client/linux` - Direct downloads
+- `https://downloader.cursor.sh/linux/appImage` - Alternative endpoint
+
+### Progress Tracking
+```bash
+show_progress() {
+    local current=$1
+    local total=$2
+    local width=50
+    local percentage=$((current * 100 / total))
+    local completed=$((current * width / total))
+    local remaining=$((width - completed))
+    
+    printf "\r["
+    printf '%*s' $completed | tr ' ' '='
+    printf '%*s' $remaining | tr ' ' '-'
+    printf "] %d%%" $percentage
+}
+```
+
+### Error Handling
+```bash
+log_command() {
+    local cmd="$1"
+    local description="$2"
+    
+    print_info "Executing: $description"
+    print_info "Command: $cmd"
+    
+    if [[ "$cmd" =~ ^safe_sudo ]]; then
+        # Extract the actual command after safe_sudo
+        local actual_cmd="${cmd#safe_sudo }"
+        echo -e "${YELLOW}[SUDO] This command requires administrator privileges${RESET}"
+        safe_sudo $actual_cmd
+        local exit_code=$?
+        if [ $exit_code -eq 0 ]; then
+            print_success "Command completed successfully"
+        else
+            print_error "Command failed with exit code $exit_code"
+        fi
+        return $exit_code
+    fi
+}
+```
 
 ---
 
 ## Troubleshooting
 
-### Permission Issues
+### Common Issues and Solutions
 
-Ensure the installer script is executable:
+#### 1. Sudo Password Hanging
+**Problem**: Script hangs after entering sudo password
+**Solution**: This version fixes the issue by removing the timeout wrapper and using direct sudo execution.
 
+#### 2. Permission Denied Errors
+**Problem**: Cannot create directories or files
+**Solution**: Ensure the script has proper permissions:
 ```bash
-chmod +x cursor-install.sh
+chmod +x cursor.sh
 ```
 
-### Missing Dependencies
-
-Manually install missing dependencies using your package manager if automatic install fails:
-
+#### 3. Missing Dependencies
+**Problem**: Required packages not found
+**Solution**: Install manually if auto-installation fails:
 ```bash
-# Ubuntu/Debian example
+# Ubuntu/Debian
 sudo apt-get update
-sudo apt-get install curl wget jq figlet rsync
+sudo apt-get install curl wget jq figlet rsync bsdtar file xdg-utils desktop-file-utils
+
+# Fedora
+sudo dnf install curl wget jq figlet rsync bsdtar file xdg-utils desktop-file-utils
+
+# Arch Linux
+sudo pacman -S curl wget jq figlet rsync bsdtar file xdg-utils desktop-file-utils
 ```
 
-### Desktop Entry Missing
-
-Run:
-
+#### 4. Desktop Entry Not Appearing
+**Problem**: Cursor doesn't appear in application menu
+**Solution**: Update desktop database:
 ```bash
 sudo update-desktop-database
 ```
 
-### `cursor` Command Not Found
-
-Verify the symlink:
-
+#### 5. Command Not Found: cursor
+**Problem**: `cursor` command not available in terminal
+**Solution**: Verify symlink and PATH:
 ```bash
 ls -la /usr/local/bin/cursor
+echo $PATH
 ```
 
-Create it manually if missing:
-
+### Debug Mode
+Enable debug mode for detailed execution tracing:
 ```bash
-sudo ln -sf /opt/Cursor/AppRun /usr/local/bin/cursor
+./cursor.sh --debug --install
 ```
-
-Ensure `/usr/local/bin` is in your PATH environment variable.
 
 ---
 
 ## Contributing
 
-Contributions are welcome! Please:
+We welcome contributions to improve the installer! Here's how to contribute:
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/your-feature`)
-3. Commit your changes (`git commit -m "Add your feature"`)
-4. Push to the branch (`git push origin feature/your-feature`)
-5. Open a Pull Request
+### Development Setup
+1. **Fork the repository**
+2. **Create a feature branch**:
+   ```bash
+   git checkout -b feature/your-feature-name
+   ```
+3. **Make your changes**
+4. **Test thoroughly** on different distributions
+5. **Submit a pull request**
 
-Please maintain code style, add tests, and update documentation accordingly.
+### Code Style Guidelines
+- Use consistent indentation (4 spaces)
+- Add comments for complex logic
+- Follow bash best practices
+- Test on multiple Linux distributions
+- Update documentation for new features
+
+### Testing
+Test the installer on various distributions:
+- Ubuntu 20.04+, Debian 10+
+- Fedora 35+, CentOS 8+
+- Arch Linux, Manjaro
+- openSUSE Leap 15.3+
 
 ---
 
@@ -188,11 +432,30 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 
 ## Support
 
-For issues and discussions, visit:
+### Getting Help
+- **GitHub Issues**: [Report bugs and request features](https://github.com/ehsanasgharzde/cursorai/issues)
+- **GitHub Discussions**: [Community discussions and Q&A](https://github.com/ehsanasgharzde/cursorai/discussions)
+- **Documentation**: This README and inline script comments
 
-* [GitHub Issues](https://github.com/khodealib/CursorInstaller/issues)
-* [GitHub Discussions](https://github.com/khodealib/CursorInstaller/discussions)
+### Before Reporting Issues
+1. Check existing issues and discussions
+2. Run with debug mode: `./cursor.sh --debug`
+3. Include system information:
+   - Linux distribution and version
+   - Architecture (x86_64, arm64)
+   - Error messages and logs
+   - Steps to reproduce
 
 ---
 
-*Thank you for using the Cursor AI IDE Installer.*
+## Conclusion
+
+The Cursor AI IDE Installer for Linux provides a comprehensive, reliable, and user-friendly solution for installing and managing Cursor IDE on Linux systems. With its fixed sudo authentication, enhanced error handling, cross-distribution support, and universal AppImage integration capabilities, it serves as both a specialized Cursor installer and a general-purpose AppImage management tool.
+
+Whether you're a developer looking to quickly install Cursor IDE or a system administrator managing multiple Linux systems, this installer provides the flexibility, reliability, and features you need.
+
+**Happy coding with Cursor AI IDE!**
+
+---
+
+*For the latest updates and releases, visit the [GitHub repository](https://github.com/ehsanasgharzde/cursorai).*
