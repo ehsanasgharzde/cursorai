@@ -1,11 +1,7 @@
 #!/bin/bash
 
-# ============================================================================
-# Enhanced Cursor IDE Linux Installer with AppImage Integration
-# Cross-distribution compatible installer for Cursor IDE
-# Supports Ubuntu/Debian, Fedora/RHEL, Arch Linux, openSUSE, and others
-# Enhanced with AppImage integration and desktop application management
-# ============================================================================
+# for debugging enable this:
+# set -x
 
 # --- ANSI Color Codes ---
 RED='\033[0;31m'
@@ -33,6 +29,77 @@ APPIMAGE_INSTALL_DIR="$HOME/.local/bin"
 APPIMAGE_DESKTOP_DIR="$HOME/.local/share/applications"
 APPIMAGE_ICON_DIR="$HOME/.local/share/icons"
 APPIMAGE_TEMP_DIR="/tmp/appimage_integration"
+
+# --- Cursor Download Variables ---
+CURSOR_API_BASE="https://www.cursor.com/api/download"
+CURSOR_DOWNLOAD_BASE="https://downloads.cursor.com/production/client/linux"
+CURSOR_ALT_DOWNLOAD="https://downloader.cursor.sh/linux/appImage"
+
+# --- Architecture Detection ---
+ARCH=$(uname -m)
+case $ARCH in
+    x86_64) CURSOR_ARCH="x64" ;;
+    aarch64|arm64) CURSOR_ARCH="arm64" ;;
+    *) CURSOR_ARCH="x64" ;;
+esac
+
+# --- Logging Functions ---
+log_command() {
+    local cmd="$1"
+    local description="$2"
+    
+    print_info "Executing: $description"
+    print_info "Command: $cmd"
+    
+    if [[ "$cmd" =~ ^safe_sudo ]]; then
+        # Extract the actual command after safe_sudo
+        local actual_cmd="${cmd#safe_sudo }"
+        echo -e "${YELLOW}[SUDO] This command requires administrator privileges${RESET}"
+        safe_sudo $actual_cmd
+        local exit_code=$?
+        if [ $exit_code -eq 0 ]; then
+            print_success "Command completed successfully"
+        else
+            print_error "Command failed with exit code $exit_code"
+        fi
+        return $exit_code
+    else
+        # Regular command execution
+        eval "$cmd"
+        local exit_code=$?
+        if [ $exit_code -eq 0 ]; then
+            print_success "Command completed successfully"
+        else
+            print_error "Command failed with exit code $exit_code"
+        fi
+        return $exit_code
+    fi
+}
+
+# --- Fixed Safe sudo execution ---
+safe_sudo() {
+    # Check if we can run sudo without password
+    if sudo -n true 2>/dev/null; then
+        print_info "Using cached sudo credentials"
+        sudo "$@"
+        return $?
+    fi
+    
+    # Prompt for password if needed
+    print_info "Administrator privileges required for: $*"
+    echo -e "${YELLOW}Please enter your password:${RESET}"
+    
+    # Execute sudo command directly without timeout wrapper
+    sudo "$@"
+    local exit_code=$?
+    
+    if [ $exit_code -ne 0 ]; then
+        print_error "Sudo command failed with exit code $exit_code"
+        return $exit_code
+    fi
+    
+    return 0
+}
 
 # --- Screen Clearing Function ---
 clear_screen() {
@@ -62,14 +129,23 @@ download_with_progress() {
     local description=$3
     
     print_info "$description"
+    print_info "URL: $url"
+    print_info "Output: $output"
     
-    wget --progress=bar:force -O "$output" "$url" 2>&1 | \
+    # Show wget progress
+    wget --progress=bar:force --timeout=30 --tries=3 -O "$output" "$url" 2>&1 | \
     while IFS= read -r line; do
-        if [[ $line =~ [0-9]+% ]]; then
-            echo -ne "\r$line"
-        fi
+        echo "$line"
     done
-    echo ""
+    
+    local exit_code=${PIPESTATUS[0]}
+    if [ $exit_code -eq 0 ]; then
+        print_success "Download completed successfully"
+    else
+        print_error "Download failed with exit code $exit_code"
+    fi
+    
+    return $exit_code
 }
 
 # --- Installation Progress Function ---
@@ -85,20 +161,20 @@ install_with_progress() {
         
         case $DISTRO_FAMILY in
             debian)
-                sudo apt-get install -y "$package" > /dev/null 2>&1
+                log_command "safe_sudo apt-get install -y $package" "Installing $package via apt"
                 ;;
             rhel)
                 if command -v dnf &>/dev/null; then
-                    sudo dnf install -y "$package" > /dev/null 2>&1
+                    log_command "safe_sudo dnf install -y $package" "Installing $package via dnf"
                 else
-                    sudo yum install -y "$package" > /dev/null 2>&1
+                    log_command "safe_sudo yum install -y $package" "Installing $package via yum"
                 fi
                 ;;
             arch)
-                sudo pacman -S --noconfirm "$package" > /dev/null 2>&1
+                log_command "safe_sudo pacman -S --noconfirm $package" "Installing $package via pacman"
                 ;;
             suse)
-                sudo zypper install -y "$package" > /dev/null 2>&1
+                log_command "safe_sudo zypper install -y $package" "Installing $package via zypper"
                 ;;
         esac
         
@@ -129,6 +205,7 @@ EOF
     echo -e "${RESET}"
     echo -e "${BOLD}${BLUE}         Advanced AI-Powered Code Editor${RESET}"
     echo -e "${CYAN}         Linux Installation & AppImage Integration Manager${RESET}"
+    echo -e "${YELLOW}         Architecture: $ARCH ($CURSOR_ARCH)${RESET}"
     echo ""
 }
 
@@ -174,6 +251,7 @@ show_help() {
     echo "  --integrate-appimage  Integrate an AppImage as desktop application"
     echo "  --list-appimages      List integrated AppImages"
     echo "  --remove-appimage     Remove an integrated AppImage"
+    echo "  --check-version       Check latest available version"
     echo ""
     echo -e "${BOLD}APPIMAGE INTEGRATION:${RESET}"
     echo "  ./cursor.sh --integrate-appimage /path/to/app.AppImage"
@@ -186,6 +264,7 @@ show_help() {
     echo "  ./cursor.sh                                    # Interactive installation"
     echo "  ./cursor.sh --install                          # Direct installation"
     echo "  ./cursor.sh --integrate-appimage app.AppImage  # Integrate AppImage"
+    echo "  ./cursor.sh --check-version                    # Check latest version"
     echo "  ./cursor.sh --help                             # Show this help"
     echo ""
     wait_for_input
@@ -220,20 +299,62 @@ detect_distro() {
         
         print_info "Detected distribution: $PRETTY_NAME"
         print_info "Distribution family: $DISTRO_FAMILY"
+        print_info "Architecture: $ARCH ($CURSOR_ARCH)"
     else
         print_error "Cannot detect Linux distribution"
         DISTRO_FAMILY="unknown"
     fi
 }
 
+# --- Check Latest Version ---
+check_latest_version() {
+    print_step "Checking latest Cursor version..."
+    
+    local api_urls=(
+        "${CURSOR_API_BASE}?platform=linux-${CURSOR_ARCH}&releaseTrack=stable"
+        "${CURSOR_API_BASE}?platform=linux-${CURSOR_ARCH}&releaseTrack=latest"
+    )
+    
+    for release_track in "stable" "latest"; do
+        local api_url="${CURSOR_API_BASE}?platform=linux-${CURSOR_ARCH}&releaseTrack=${release_track}"
+        print_info "Checking $release_track release track..."
+        print_info "API URL: $api_url"
+        
+        local response=$(curl -s -A "Mozilla/5.0 (X11; Linux x86_64)" "$api_url" 2>/dev/null)
+        
+        if [ -n "$response" ]; then
+            local version=$(echo "$response" | jq -r '.version // .releaseVersion // empty' 2>/dev/null)
+            local download_url=$(echo "$response" | jq -r '.downloadUrl // .url // empty' 2>/dev/null)
+            
+            if [ -n "$version" ] && [ "$version" != "null" ]; then
+                print_success "Latest $release_track version: $version"
+                if [ -n "$download_url" ] && [ "$download_url" != "null" ]; then
+                    print_info "Download URL: $download_url"
+                fi
+                echo ""
+            else
+                print_warning "Could not parse version from $release_track API response"
+            fi
+        else
+            print_warning "No response from $release_track API"
+        fi
+    done
+}
+
 # --- Create User Directories ---
 create_user_directories() {
     print_step "Creating user directories..."
     
-    mkdir -p "$USER_LOCAL_BIN"
-    mkdir -p "$USER_DESKTOP_DIR"
-    mkdir -p "$USER_ICON_DIR"
-    mkdir -p "$APPIMAGE_TEMP_DIR"
+    local dirs=("$USER_LOCAL_BIN" "$USER_DESKTOP_DIR" "$USER_ICON_DIR" "$APPIMAGE_TEMP_DIR")
+    
+    for dir in "${dirs[@]}"; do
+        if [ ! -d "$dir" ]; then
+            print_info "Creating directory: $dir"
+            mkdir -p "$dir"
+        else
+            print_info "Directory already exists: $dir"
+        fi
+    done
     
     if [[ ":$PATH:" != *":$USER_LOCAL_BIN:"* ]]; then
         print_info "Adding $USER_LOCAL_BIN to PATH in ~/.bashrc"
@@ -319,18 +440,18 @@ install_missing_dependencies() {
     print_step "Updating package database..."
     case $DISTRO_FAMILY in
         debian)
-            sudo apt-get update -qq > /dev/null 2>&1
+            log_command "safe_sudo apt-get update" "Updating apt package database"
             ;;
         rhel)
             if command -v dnf &>/dev/null; then
-                sudo dnf check-update > /dev/null 2>&1
+                log_command "safe_sudo dnf check-update" "Checking for dnf updates"
             fi
             ;;
         arch)
-            sudo pacman -Sy --noconfirm > /dev/null 2>&1
+            log_command "safe_sudo pacman -Sy --noconfirm" "Updating pacman package database"
             ;;
         suse)
-            sudo zypper refresh > /dev/null 2>&1
+            log_command "safe_sudo zypper refresh" "Refreshing zypper repositories"
             ;;
     esac
     
@@ -369,6 +490,7 @@ extract_appimage_metadata() {
     chmod +x "$appimage_path"
     
     # Extract AppImage contents
+    print_info "Extracting AppImage contents..."
     cd "$temp_dir"
     "$appimage_path" --appimage-extract > /dev/null 2>&1
     
@@ -476,17 +598,20 @@ integrate_appimage() {
     
     # Copy AppImage to user bin
     print_step "Installing AppImage to $USER_LOCAL_BIN..."
+    print_info "Copying $appimage_path to $target_path"
     cp "$appimage_path" "$target_path"
     chmod +x "$target_path"
     
     # Copy icon if available
     if [ -n "$APPIMAGE_ICON_FILE" ] && [ -f "$APPIMAGE_ICON_FILE" ]; then
         print_step "Installing icon..."
+        print_info "Copying icon to $icon_path"
         cp "$APPIMAGE_ICON_FILE" "$icon_path"
     fi
     
     # Create desktop file
     print_step "Creating desktop entry..."
+    print_info "Creating desktop file: $desktop_path"
     cat > "$desktop_path" << EOF
 [Desktop Entry]
 Name=${APPIMAGE_NAME:-$(basename "$appimage_path" .AppImage)}
@@ -504,7 +629,7 @@ EOF
     # Update desktop database
     print_step "Updating desktop database..."
     if command -v update-desktop-database &>/dev/null; then
-        update-desktop-database "$USER_DESKTOP_DIR" > /dev/null 2>&1
+        log_command "update-desktop-database '$USER_DESKTOP_DIR'" "Updating desktop database"
     fi
     
     # Clean up temporary directory
@@ -631,10 +756,12 @@ remove_integrated_appimage() {
     print_step "Removing AppImage integration..."
     
     # Remove desktop file
+    print_info "Removing desktop file: $desktop_file"
     rm -f "$desktop_file"
     
     # Remove executable
     if [ -f "$exec_path" ]; then
+        print_info "Removing executable: $exec_path"
         rm -f "$exec_path"
     fi
     
@@ -642,12 +769,13 @@ remove_integrated_appimage() {
     local icon_name=$(basename "$desktop_file" .desktop)
     local icon_path="$USER_ICON_DIR/${icon_name}.png"
     if [ -f "$icon_path" ]; then
+        print_info "Removing icon: $icon_path"
         rm -f "$icon_path"
     fi
     
     # Update desktop database
     if command -v update-desktop-database &>/dev/null; then
-        update-desktop-database "$USER_DESKTOP_DIR" > /dev/null 2>&1
+        log_command "update-desktop-database '$USER_DESKTOP_DIR'" "Updating desktop database"
     fi
     
     print_success "AppImage integration removed successfully"
@@ -658,29 +786,77 @@ remove_integrated_appimage() {
 download_latest_cursor_appimage() {
     print_step "Downloading latest Cursor AppImage..."
     
-    local api_url="https://www.cursor.com/api/download?platform=linux-x64&releaseTrack=stable"
-    local user_agent="Mozilla/5.0 (X11; Linux x86_64)"
+    # Try multiple API endpoints
+    local api_urls=(
+        "${CURSOR_API_BASE}?platform=linux-${CURSOR_ARCH}&releaseTrack=stable"
+        "${CURSOR_API_BASE}?platform=linux-${CURSOR_ARCH}&releaseTrack=latest"
+        "${CURSOR_ALT_DOWNLOAD}/${CURSOR_ARCH}"
+    )
+    
+    local user_agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     local download_path="/tmp/cursor-latest.AppImage"
+    local final_url=""
     
-    print_info "Fetching download URL..."
-    local final_url=$(curl -sL -A "$user_agent" "$api_url" | jq -r '.url // .downloadUrl')
+    # Try each API endpoint
+    for api_url in "${api_urls[@]}"; do
+        print_info "Trying API endpoint: $api_url"
+        
+        if [[ "$api_url" =~ "api/download" ]]; then
+            # JSON API response
+            local response=$(curl -s -A "$user_agent" "$api_url" 2>/dev/null)
+            if [ -n "$response" ]; then
+                final_url=$(echo "$response" | jq -r '.downloadUrl // .url // empty' 2>/dev/null)
+                if [ -n "$final_url" ] && [ "$final_url" != "null" ]; then
+                    print_success "Got download URL from API: $final_url"
+                    break
+                fi
+            fi
+        else
+            # Direct download endpoint
+            if curl -s -I -A "$user_agent" "$api_url" | grep -q "200 OK"; then
+                final_url="$api_url"
+                print_success "Direct download available: $final_url"
+                break
+            fi
+        fi
+    done
     
-    if [ -z "$final_url" ] || [ "$final_url" = "null" ]; then
-        print_error "Could not retrieve download URL"
+    if [ -z "$final_url" ]; then
+        print_error "Could not retrieve download URL from any endpoint"
         return 1
     fi
     
-    print_info "Download URL: $final_url"
+    print_info "Final download URL: $final_url"
     
-    download_with_progress "$final_url" "$download_path" "Downloading Cursor AppImage..."
-    
-    if [ $? -eq 0 ] && [ -s "$download_path" ]; then
-        print_success "Download completed successfully"
-        echo "$download_path"
-        return 0
+    # Download with progress
+    if download_with_progress "$final_url" "$download_path" "Downloading Cursor AppImage..."; then
+        if [ -s "$download_path" ]; then
+            print_success "Download completed successfully"
+            print_info "File size: $(du -h "$download_path" | cut -f1)"
+            echo "$download_path"
+            return 0
+        else
+            print_error "Downloaded file is empty"
+            return 1
+        fi
     else
         print_error "Download failed"
         return 1
+    fi
+}
+
+# --- Launch Cursor Prompt ---
+launch_cursor_prompt() {
+    read -p "Launch Cursor IDE now? [y/N]: " launch_now
+    if [[ "$launch_now" =~ ^[Yy]$ ]]; then
+        print_info "Launching Cursor IDE..."
+        if command -v cursor &>/dev/null; then
+            cursor &
+        elif [ -x "$EXECUTABLE_PATH" ]; then
+            "$EXECUTABLE_PATH" &
+        else
+            print_error "Cursor executable not found"
+        fi
     fi
 }
 
@@ -702,25 +878,15 @@ install_cursor() {
         return 1
     fi
     
-    print_step "Attempting native package installation..."
-    if try_native_installation; then
-        print_success "Native installation completed successfully"
-        configure_desktop_integration
-        launch_cursor_prompt
-        wait_for_input
-        return 0
-    fi
-    
-    print_info "Falling back to AppImage installation..."
-    
     print_step "Choose installation method:"
-    echo "  1. Download latest AppImage automatically"
+    echo "  1. Download latest AppImage automatically (recommended)"
     echo "  2. Provide local AppImage path"
-    echo "  3. Integrate as user AppImage (recommended)"
-    echo "  4. Cancel installation"
+    echo "  3. Integrate as user AppImage (no system installation)"
+    echo "  4. Try native package installation"
+    echo "  5. Cancel installation"
     
     while true; do
-        read -p "Enter your choice [1-4]: " choice
+        read -p "Enter your choice [1-5]: " choice
         case $choice in
             1)
                 clear_screen
@@ -768,12 +934,27 @@ install_cursor() {
                 fi
                 ;;
             4)
+                clear_screen
+                display_cursor_logo
+                if try_native_installation; then
+                    print_success "Native installation completed successfully"
+                    configure_desktop_integration
+                    launch_cursor_prompt
+                    wait_for_input
+                    return 0
+                else
+                    print_error "Native installation failed"
+                    wait_for_input
+                    return 1
+                fi
+                ;;
+            5)
                 print_info "Installation cancelled"
                 wait_for_input
                 return 1
                 ;;
             *)
-                print_error "Invalid choice. Please enter 1, 2, 3, or 4."
+                print_error "Invalid choice. Please enter 1, 2, 3, 4, or 5."
                 ;;
         esac
     done
@@ -794,6 +975,7 @@ try_native_installation() {
             try_arch_installation
             ;;
         *)
+            print_warning "Native installation not available for $DISTRO_FAMILY"
             return 1
             ;;
     esac
@@ -803,68 +985,93 @@ try_native_installation() {
 try_debian_installation() {
     print_info "Attempting to install Cursor via .deb package..."
     
-    print_step "Checking repositories..."
-    if apt-cache search cursor-ide &>/dev/null; then
-        print_info "Found Cursor in repositories"
-        sudo apt-get update -qq > /dev/null 2>&1
-        
-        if sudo apt-get install -y cursor-ide > /dev/null 2>&1; then
-            print_success "Installed Cursor via apt"
-            return 0
-        fi
-    fi
+    # Try different download patterns
+    local deb_urls=(
+        "https://downloads.cursor.com/production/client/linux/${CURSOR_ARCH}/deb/cursor-latest.deb"
+        "https://downloader.cursor.sh/linux/deb/${CURSOR_ARCH}"
+    )
     
-    print_step "Downloading .deb package..."
-    local deb_url="https://www.cursor.com/latest/linux/deb"
     local deb_path="/tmp/cursor.deb"
+    local download_success=false
     
-    download_with_progress "$deb_url" "$deb_path" "Downloading .deb package..."
-    
-    if [ -f "$deb_path" ]; then
-        print_info "Installing .deb package..."
+    for deb_url in "${deb_urls[@]}"; do
+        print_info "Trying download from: $deb_url"
         
-        if sudo dpkg -i "$deb_path" > /dev/null 2>&1; then
-            print_success "Installed Cursor via .deb package"
-            sudo apt-get install -f -y > /dev/null 2>&1
-            rm -f "$deb_path"
-            return 0
-        else
-            print_warning ".deb installation failed"
-            rm -f "$deb_path"
+        if download_with_progress "$deb_url" "$deb_path" "Downloading .deb package..."; then
+            if [ -s "$deb_path" ]; then
+                download_success=true
+                break
+            fi
         fi
+    done
+    
+    if [ "$download_success" = false ]; then
+        print_error "Failed to download .deb package"
+        return 1
     fi
     
-    return 1
+    print_info "Installing .deb package..."
+    
+    if log_command "safe_sudo dpkg -i '$deb_path'" "Installing Cursor .deb package"; then
+        # Fix any dependency issues
+        log_command "safe_sudo apt-get install -f -y" "Fixing dependencies"
+        print_success "Installed Cursor via .deb package"
+        rm -f "$deb_path"
+        return 0
+    else
+        print_error ".deb installation failed"
+        rm -f "$deb_path"
+        return 1
+    fi
 }
 
 # --- RHEL-based Installation ---
 try_rhel_installation() {
     print_info "Attempting to install Cursor via .rpm package..."
     
-    local rpm_url="https://www.cursor.com/latest/linux/rpm"
+    # Try different download patterns
+    local rpm_urls=(
+        "https://downloads.cursor.com/production/client/linux/${CURSOR_ARCH}/rpm/cursor-latest.rpm"
+        "https://downloader.cursor.sh/linux/rpm/${CURSOR_ARCH}"
+    )
+    
     local rpm_path="/tmp/cursor.rpm"
+    local download_success=false
     
-    download_with_progress "$rpm_url" "$rpm_path" "Downloading .rpm package..."
-    
-    if [ -f "$rpm_path" ]; then
-        print_info "Installing .rpm package..."
+    for rpm_url in "${rpm_urls[@]}"; do
+        print_info "Trying download from: $rpm_url"
         
-        if command -v dnf &>/dev/null; then
-            if sudo dnf install -y "$rpm_path" > /dev/null 2>&1; then
-                print_success "Installed Cursor via dnf"
-                rm -f "$rpm_path"
-                return 0
-            fi
-        elif command -v yum &>/dev/null; then
-            if sudo yum install -y "$rpm_path" > /dev/null 2>&1; then
-                print_success "Installed Cursor via yum"
-                rm -f "$rpm_path"
-                return 0
+        if download_with_progress "$rpm_url" "$rpm_path" "Downloading .rpm package..."; then
+            if [ -s "$rpm_path" ]; then
+                download_success=true
+                break
             fi
         fi
-        rm -f "$rpm_path"
+    done
+    
+    if [ "$download_success" = false ]; then
+        print_error "Failed to download .rpm package"
+        return 1
     fi
     
+    print_info "Installing .rpm package..."
+    
+    if command -v dnf &>/dev/null; then
+        if log_command "safe_sudo dnf install -y '$rpm_path'" "Installing Cursor .rpm package via dnf"; then
+            print_success "Installed Cursor via dnf"
+            rm -f "$rpm_path"
+            return 0
+        fi
+    elif command -v yum &>/dev/null; then
+        if log_command "safe_sudo yum install -y '$rpm_path'" "Installing Cursor .rpm package via yum"; then
+            print_success "Installed Cursor via yum"
+            rm -f "$rpm_path"
+            return 0
+        fi
+    fi
+    
+    print_error "RPM installation failed"
+    rm -f "$rpm_path"
     return 1
 }
 
@@ -872,23 +1079,23 @@ try_rhel_installation() {
 try_arch_installation() {
     print_info "Attempting to install Cursor via AUR..."
     
-    if command -v yay &>/dev/null; then
-        print_info "Using yay to install from AUR..."
-        
-        if yay -S --noconfirm cursor-ide > /dev/null 2>&1; then
-            print_success "Installed Cursor via AUR (yay)"
-            return 0
-        fi
-    fi
+    local aur_helpers=("yay" "paru" "aurman")
+    local aur_packages=("cursor-appimage" "cursor-ide" "cursor-bin")
     
-    if command -v paru &>/dev/null; then
-        print_info "Using paru to install from AUR..."
-        
-        if paru -S --noconfirm cursor-ide > /dev/null 2>&1; then
-            print_success "Installed Cursor via AUR (paru)"
-            return 0
+    for helper in "${aur_helpers[@]}"; do
+        if command -v "$helper" &>/dev/null; then
+            print_info "Using $helper to install from AUR..."
+            
+            for package in "${aur_packages[@]}"; do
+                print_info "Trying AUR package: $package"
+                
+                if log_command "$helper -S --noconfirm $package" "Installing $package via $helper"; then
+                    print_success "Installed Cursor via AUR ($helper - $package)"
+                    return 0
+                fi
+            done
         fi
-    fi
+    done
     
     print_warning "No AUR helper found or AUR installation failed"
     return 1
@@ -904,7 +1111,7 @@ install_appimage() {
     
     print_info "Extracting AppImage..."
     cd /tmp
-    "$appimage_path" --appimage-extract > /dev/null 2>&1
+    "$appimage_path" --appimage-extract
     
     if [ ! -d "/tmp/squashfs-root" ]; then
         print_error "AppImage extraction failed"
@@ -912,25 +1119,21 @@ install_appimage() {
     fi
     
     print_info "Installing to system directory..."
-    sudo mkdir -p "$CURSOR_EXTRACT_DIR"
+    log_command "safe_sudo mkdir -p '$CURSOR_EXTRACT_DIR'" "Creating installation directory"
     
-    sudo rsync -a --progress /tmp/squashfs-root/ "$CURSOR_EXTRACT_DIR/" 2>&1 | \
-    while IFS= read -r line; do
-        if [[ $line =~ [0-9]+% ]]; then
-            echo -ne "\r$line"
-        fi
-    done
-    echo ""
+    # Use rsync with progress
+    print_info "Copying files to $CURSOR_EXTRACT_DIR..."
+    log_command "safe_sudo rsync -av --progress /tmp/squashfs-root/ '$CURSOR_EXTRACT_DIR/'" "Copying AppImage contents"
     
     if [ $? -eq 0 ]; then
         print_success "AppImage installed successfully"
-        sudo rm -rf /tmp/squashfs-root
+        rm -rf /tmp/squashfs-root
         rm -f "$appimage_path"
         configure_desktop_integration
         return 0
     else
         print_error "Installation failed"
-        sudo rm -rf /tmp/squashfs-root
+        rm -rf /tmp/squashfs-root
         return 1
     fi
 }
@@ -940,16 +1143,22 @@ configure_desktop_integration() {
     print_step "Configuring desktop integration..."
     
     print_info "Installing icon..."
-    if [ -f "${CURSOR_EXTRACT_DIR}/usr/share/icons/hicolor/128x128/apps/cursor.png" ]; then
-        sudo cp "${CURSOR_EXTRACT_DIR}/usr/share/icons/hicolor/128x128/apps/cursor.png" "$ICON_PATH"
-    elif [ -f "${CURSOR_EXTRACT_DIR}/cursor.png" ]; then
-        sudo cp "${CURSOR_EXTRACT_DIR}/cursor.png" "$ICON_PATH"
-    else
-        print_warning "Icon not found, using default"
-    fi
+    local icon_sources=(
+        "${CURSOR_EXTRACT_DIR}/usr/share/icons/hicolor/128x128/apps/cursor.png"
+        "${CURSOR_EXTRACT_DIR}/cursor.png"
+        "${CURSOR_EXTRACT_DIR}/resources/app/assets/cursor.png"
+    )
+    
+    for icon_source in "${icon_sources[@]}"; do
+        if [ -f "$icon_source" ]; then
+            print_info "Found icon at: $icon_source"
+            log_command "safe_sudo cp '$icon_source' '$ICON_PATH'" "Installing icon"
+            break
+        fi
+    done
     
     print_info "Creating desktop entry..."
-    sudo tee "$DESKTOP_ENTRY_PATH" > /dev/null << EOF
+    log_command "safe_sudo tee '$DESKTOP_ENTRY_PATH'" "Creating desktop entry" << EOF
 [Desktop Entry]
 Name=Cursor AI IDE
 Comment=Advanced AI-powered code editor
@@ -963,10 +1172,10 @@ StartupWMClass=Cursor
 EOF
     
     print_info "Updating desktop database..."
-    sudo update-desktop-database > /dev/null 2>&1
+    log_command "safe_sudo update-desktop-database" "Updating desktop database"
     
     print_info "Creating command line symlink..."
-    sudo ln -sf "$EXECUTABLE_PATH" "$SYMLINK_PATH"
+    log_command "safe_sudo ln -sf '$EXECUTABLE_PATH' '$SYMLINK_PATH'" "Creating command line symlink"
     
     print_success "Desktop integration configured"
     print_info "You can now run 'cursor' from the command line"
@@ -987,11 +1196,11 @@ update_cursor() {
     print_step "Updating Cursor IDE..."
     
     print_info "Creating backup of current installation..."
-    sudo cp -r "$CURSOR_EXTRACT_DIR" "${CURSOR_EXTRACT_DIR}.backup"
+    log_command "safe_sudo cp -r '$CURSOR_EXTRACT_DIR' '${CURSOR_EXTRACT_DIR}.backup'" "Creating backup"
     
     if try_native_update; then
         print_success "Native update completed"
-        sudo rm -rf "${CURSOR_EXTRACT_DIR}.backup"
+        log_command "safe_sudo rm -rf '${CURSOR_EXTRACT_DIR}.backup'" "Removing backup"
         launch_cursor_prompt
         wait_for_input
         return 0
@@ -1003,24 +1212,24 @@ update_cursor() {
     download_path=$(download_latest_cursor_appimage)
     if [ $? -eq 0 ] && [ -f "$download_path" ]; then
         print_info "Removing old installation..."
-        sudo rm -rf "${CURSOR_EXTRACT_DIR:?}"/*
+        log_command "safe_sudo rm -rf '${CURSOR_EXTRACT_DIR:?}'/*" "Removing old files"
         
         if install_appimage "$download_path"; then
             print_success "Update completed successfully"
-            sudo rm -rf "${CURSOR_EXTRACT_DIR}.backup"
+            log_command "safe_sudo rm -rf '${CURSOR_EXTRACT_DIR}.backup'" "Removing backup"
             launch_cursor_prompt
             wait_for_input
             return 0
         else
             print_error "Update failed, restoring backup..."
-            sudo rm -rf "$CURSOR_EXTRACT_DIR"
-            sudo mv "${CURSOR_EXTRACT_DIR}.backup" "$CURSOR_EXTRACT_DIR"
+            log_command "safe_sudo rm -rf '$CURSOR_EXTRACT_DIR'" "Removing failed installation"
+            log_command "safe_sudo mv '${CURSOR_EXTRACT_DIR}.backup' '$CURSOR_EXTRACT_DIR'" "Restoring backup"
             wait_for_input
             return 1
         fi
     else
         print_error "Download failed, keeping current installation"
-        sudo rm -rf "${CURSOR_EXTRACT_DIR}.backup"
+        log_command "safe_sudo rm -rf '${CURSOR_EXTRACT_DIR}.backup'" "Removing backup"
         wait_for_input
         return 1
     fi
@@ -1032,28 +1241,29 @@ try_native_update() {
     
     case $DISTRO_FAMILY in
         debian)
-            if sudo apt-get update -qq > /dev/null 2>&1 && sudo apt-get upgrade -y cursor-ide > /dev/null 2>&1; then
+            log_command "safe_sudo apt-get update" "Updating package database"
+            if log_command "safe_sudo apt-get upgrade -y cursor-ide" "Upgrading Cursor via apt"; then
                 return 0
             fi
             ;;
         rhel)
             if command -v dnf &>/dev/null; then
-                if sudo dnf upgrade -y cursor-ide > /dev/null 2>&1; then
+                if log_command "safe_sudo dnf upgrade -y cursor-ide" "Upgrading Cursor via dnf"; then
                     return 0
                 fi
             elif command -v yum &>/dev/null; then
-                if sudo yum update -y cursor-ide > /dev/null 2>&1; then
+                if log_command "safe_sudo yum update -y cursor-ide" "Upgrading Cursor via yum"; then
                     return 0
                 fi
             fi
             ;;
         arch)
             if command -v yay &>/dev/null; then
-                if yay -Syu --noconfirm cursor-ide > /dev/null 2>&1; then
+                if log_command "yay -Syu --noconfirm cursor-appimage" "Upgrading Cursor via yay"; then
                     return 0
                 fi
             elif command -v paru &>/dev/null; then
-                if paru -Syu --noconfirm cursor-ide > /dev/null 2>&1; then
+                if log_command "paru -Syu --noconfirm cursor-appimage" "Upgrading Cursor via paru"; then
                     return 0
                 fi
             fi
@@ -1094,166 +1304,118 @@ uninstall_cursor() {
         
         if [[ "$component" == "$CURSOR_EXTRACT_DIR" ]] && [ -d "$component" ]; then
             printf " Removing application directory... "
-            sudo rm -rf "$component"
+            log_command "safe_sudo rm -rf '$component'" "Removing application directory"
             echo "Done"
         elif [ -f "$component" ] || [ -L "$component" ]; then
             printf " Removing %s... " "$(basename "$component")"
-            sudo rm -f "$component"
+            log_command "safe_sudo rm -f '$component'" "Removing $(basename "$component")"
             echo "Done"
         else
             printf " Skipping %s (not found)... " "$(basename "$component")"
             echo "Done"
         fi
     done
-    echo ""
+    printf "\n"
     
     print_info "Updating desktop database..."
-    sudo update-desktop-database > /dev/null 2>&1
+    log_command "safe_sudo update-desktop-database" "Updating desktop database"
     
-    print_success "Cursor IDE has been completely removed"
+    print_success "Cursor IDE has been successfully uninstalled"
     wait_for_input
 }
 
-# --- Launch Cursor Prompt ---
-launch_cursor_prompt() {
-    echo ""
-    read -p "Would you like to launch Cursor now? [y/N]: " launch
-    if [[ "$launch" =~ ^[Yy]$ ]]; then
-        print_info "Launching Cursor IDE..."
-        if command -v cursor &>/dev/null; then
-            cursor &
-            print_success "Cursor launched successfully"
-        else
-            print_error "Could not launch Cursor"
-        fi
-    fi
-}
-
 # --- Main Menu ---
-show_main_menu() {
-    clear_screen
-    display_cursor_logo
-    
-    echo -e "${BOLD}${BLUE}Linux Installation & AppImage Integration Manager${RESET}"
-    echo -e "${CYAN}Compatible with Ubuntu, Debian, Fedora, RHEL, Arch, openSUSE, and more${RESET}"
-    echo ""
-    echo "----------------------------------------"
-    echo "  1. Install Cursor IDE"
-    echo "  2. Update Cursor IDE"
-    echo "  3. Uninstall Cursor IDE"
-    echo "  4. Integrate AppImage"
-    echo "  5. List Integrated AppImages"
-    echo "  6. Remove Integrated AppImage"
-    echo "  7. Show Help"
-    echo "  8. Exit"
-    echo "----------------------------------------"
-    echo ""
-    
+main_menu() {
     while true; do
-        read -p "Choose an option [1-8]: " choice
+        clear_screen
+        display_cursor_logo
+        
+        echo -e "${BOLD}MAIN MENU${RESET}"
+        echo "  1. Install Cursor IDE"
+        echo "  2. Update Cursor IDE"
+        echo "  3. Uninstall Cursor IDE"
+        echo "  4. Check latest version"
+        echo "  5. Integrate custom AppImage"
+        echo "  6. List integrated AppImages"
+        echo "  7. Remove integrated AppImage"
+        echo "  8. Help"
+        echo "  9. Exit"
+        echo ""
+        
+        read -p "Enter your choice [1-9]: " choice
+        
         case $choice in
-            1)
-                install_cursor
-                show_main_menu
-                break
-                ;;
-            2)
-                update_cursor
-                show_main_menu
-                break
-                ;;
-            3)
-                uninstall_cursor
-                show_main_menu
-                break
-                ;;
-            4)
-                clear_screen
-                display_cursor_logo
-                read -p "Enter AppImage file path: " appimage_path
+            1) install_cursor ;;
+            2) update_cursor ;;
+            3) uninstall_cursor ;;
+            4) check_latest_version; wait_for_input ;;
+            5) 
+                read -p "Enter AppImage path: " appimage_path
                 if [ -f "$appimage_path" ]; then
                     integrate_appimage "$appimage_path"
+                    wait_for_input
                 else
                     print_error "File not found: $appimage_path"
+                    wait_for_input
                 fi
-                wait_for_input
-                show_main_menu
-                break
                 ;;
-            5)
-                list_integrated_appimages
-                show_main_menu
-                break
-                ;;
-            6)
-                remove_integrated_appimage
-                show_main_menu
-                break
-                ;;
-            7)
-                show_help
-                show_main_menu
-                break
-                ;;
-            8)
-                clear_screen
-                print_info "Thank you for using Cursor IDE Linux Installer!"
+            6) list_integrated_appimages ;;
+            7) remove_integrated_appimage ;;
+            8) show_help ;;
+            9) 
+                print_info "Goodbye!"
                 exit 0
                 ;;
-            *)
-                print_error "Invalid choice. Please enter 1-8."
+            *) 
+                print_error "Invalid choice. Please enter 1-9."
+                sleep 2
                 ;;
         esac
     done
 }
 
-# --- Main Execution ---
+# --- Main Script Logic ---
 main() {
-    case "${1:-}" in
-        --help|-h)
-            show_help
-            ;;
-        --install)
-            detect_distro
-            install_cursor
-            ;;
-        --update)
-            detect_distro
-            update_cursor
-            ;;
-        --uninstall)
-            uninstall_cursor
-            ;;
-        --integrate-appimage)
+    # Enable debugging if requested
+    if [[ "$1" == "--debug" ]]; then
+        set -x
+        shift
+    fi
+    
+    # Detect distribution
+    detect_distro
+    
+    # Process command line arguments
+    case $1 in
+        --help) show_help; exit 0 ;;
+        --install) install_cursor; exit $? ;;
+        --update) update_cursor; exit $? ;;
+        --uninstall) uninstall_cursor; exit $? ;;
+        --check-version) check_latest_version; exit $? ;;
+        --integrate-appimage) 
             if [ -n "$2" ]; then
-                detect_distro
-                if [ "$2" = "--auto-download" ]; then
-                    local download_path
-                    download_path=$(download_latest_cursor_appimage)
-                    if [ $? -eq 0 ] && [ -f "$download_path" ]; then
-                        integrate_appimage "$download_path"
-                    else
-                        print_error "Download failed"
-                        exit 1
-                    fi
-                else
-                    integrate_appimage "$2"
-                fi
+                integrate_appimage "$2"
+                exit $?
             else
                 print_error "AppImage path required"
-                echo "Usage: $0 --integrate-appimage /path/to/app.AppImage"
                 exit 1
             fi
             ;;
-        --list-appimages)
-            list_integrated_appimages
-            ;;
-        --remove-appimage)
-            remove_integrated_appimage
+        --list-appimages) list_integrated_appimages; exit $? ;;
+        --remove-appimage) remove_integrated_appimage; exit $? ;;
+        --auto-download)
+            download_path=$(download_latest_cursor_appimage)
+            if [ $? -eq 0 ] && [ -f "$download_path" ]; then
+                integrate_appimage "$download_path"
+                exit $?
+            else
+                print_error "Download failed"
+                exit 1
+            fi
             ;;
         "")
-            detect_distro
-            show_main_menu
+            # Interactive mode
+            main_menu
             ;;
         *)
             print_error "Unknown option: $1"
@@ -1263,9 +1425,5 @@ main() {
     esac
 }
 
-# --- Script Entry Point ---
-if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
-    main "$@"
-fi
-
-# --- End of Script ---
+# --- Run Main Function ---
+main "$@"
